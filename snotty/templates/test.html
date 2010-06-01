@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>QUnit Test Suite</title>
+	<link rel="stylesheet" href="/static/qunit/qunit.css" type="text/css" media="screen">
+	<script type="text/javascript" src="/static/qunit/qunit.js"></script>
+    <script type="text/javascript" src="/static/qunit/json.js"></script>
+    <script type="text/javascript" src="/static/qunit/report_tests.js"></script>
+    {% for js_path in test_files %}
+	    <script type="text/javascript" src="{{ js_path }}"></script>
+	{% endfor %}
+</head>
+<body>
+	<h1 id="qunit-header">QUnit Test Suite powered by rpz.websocket</h1>
+	<h2 id="qunit-banner"></h2>
+	<div id="qunit-testrunner-toolbar"></div>
+	<h2 id="qunit-userAgent"></h2>
+	<ol id="qunit-tests"></ol>
+</body>
+</html>

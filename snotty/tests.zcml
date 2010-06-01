@@ -1,0 +1,36 @@
+<configure xmlns="http://namespaces.repoze.org/bfg">
+
+  <!-- this must be included for the view declarations to work -->
+  <include package="repoze.bfg.includes" />
+  <include package="repoze.bfg.jinja2"/>
+  <include package="zope.component" file="meta.zcml" />
+
+  <renderer
+     factory="repoze.bfg.jinja2.bindings.renderer_factory"
+     name=".html"
+     />
+
+  <view
+     context=".utils.NamespaceContext"
+     view=".utils.WSTestGenerator"
+     custom_predicates='rpz.websocket.is_websocket'
+     />
+
+
+  <!--<view-->
+     <!--context=".models.Root"-->
+     <!--view=".run.ws_view"-->
+     <!--request_type='.interfaces.IWebsocketSessionRequest'-->
+     <!--/>-->
+
+  <static
+     name="tests"
+     path="../static/tests"
+     />
+
+  <static
+     name="static"
+     path="../static"
+     />
+
+</configure>
