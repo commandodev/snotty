@@ -2,23 +2,35 @@
 
     var module = null;
     var test = null;
-    var ws = {
-        root: new WebSocket('ws://' + window.location.host + '/')
+    var ws = new WebSocket('ws://' + window.location.host + '/')
+    QU.stop(100);
+    ws.onopen = function() {
+        QU.start();
     };
 
     QU.moduleStart = function(name){
         module = name;
-        name = name.replace(/ /g, '_')
-        var url = ['ws://', window.location.host, '/', name, '/'].join('');
-        var this_ws = new WebSocket(url);
-        QU.stop(100);
-        this_ws.onopen = function() {
-            QU.start();
-        };
-        ws[module] = this_ws
+//        name = name.replace(/ /g, '_')
+//        var url = ['ws://', window.location.host, '/', name, '/'].join('');
+//        var this_ws = new WebSocket(url);
+//        QU.stop(100);
+//        this_ws.onopen = function() {
+//            QU.start();
+//        };
+//        ws[module] = this_ws
 
 
     };
+//    QU.moduleDone = function(name, failures, total){
+//        var this_ws = ws[name]
+//        if (this_ws){
+//            console.log('Closing ' + name)
+//            this_ws.close();
+//        }
+//        else {
+//            console.log('No websocket for ' + name)
+//        }
+//    }
     QU.testStart = function(name){
         test = name;
     };
@@ -30,13 +42,16 @@
 //        this_ws.send(payload);
 //    }
     QU.testDone = function(name, failures, total){
-        var this_ws = ws[module];
-        var payload = JSON.stringify({name: name, failures: failures, total: total});
-        this_ws.send(payload);
+        var payload = JSON.stringify({namespace: module,
+                                      name: name,
+                                      failures: failures,
+                                      total: total});
+        ws.send(payload);
 
     };
     QU.done = function(failures, total){
         console.log(JSON.stringify({DONE: {failed: failures, total: total}}));
-        ws.root.send(JSON.stringify({DONE: {failed: failures, total: total}}));
+        ws.send(JSON.stringify({DONE: {failed: failures, total: total}}));
+        //ws.close();
     };
 }(QUnit))

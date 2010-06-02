@@ -17,16 +17,16 @@ def pub(q, to_pub):
         q.put(pub)
         #sleep()
 
-def test_ipc():
-    q = Queue(4)
-    spawn_n(pub, q, [1,2,3])
-    spawn_n(pub, q, [4,5,6])
-
-    acc = []
-    spawn_n(listener, q, acc)
-    q.join()
-
-    eq_(acc, range(1,7))
+#def test_ipc():
+#    q = Queue(4)
+#    spawn_n(pub, q, [1,2,3])
+#    spawn_n(pub, q, [4,5,6])
+#
+#    acc = []
+#    spawn_n(listener, q, acc)
+#    q.join()
+#
+#    eq_(acc, range(1,7))
 
 def test_namespacecontext_get_factory():
     QUEUE = object()
