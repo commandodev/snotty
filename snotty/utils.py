@@ -1,15 +1,90 @@
-from eventlet import Queue, event, spawn_n, hubs, sleep
-from eventlet.green import subprocess
-from nose.tools import ok_
-from repoze.bfg.traversal import model_path_tuple
+from pyramid.asset import abspath_from_asset_spec
+import eventlet
 import json
+import logging
+import pyramid_zcml
 import sys
 
-from rpz.websocket import WebSocketView
-from rpz.websocket.context import WebSocketAwareContext
-from rpz.websocket.test_utils import Fixture
+from eventlet import hubs, debug, event, wsgi
+from eventlet.green import subprocess
+from nose.tools import ok_
+from paste.deploy import loadapp
+from pyramid import testing
+from pyramid.exceptions import NotFound
+from pyramid.traversal import resource_path_tuple
+from stargate import WebSocketView
+from stargate.resource import WebSocketAwareResource
+from StringIO import StringIO
+from webob.exc import HTTPNotFound
+from zope.interface import Interface
 
 
+class Root(object):
+    pass
+
+def get_root(request):
+    return Root()
+
+def not_found(context, request):
+    assert(isinstance(context, NotFound))
+    return HTTPNotFound('404')
+
+class ISnottyQueue(Interface):
+    pass
+
+class Fixture(object):
+    """Use fixture to setup a server once for a module"""
+
+    def __init__(self, config_url, **kwargs):
+        """
+        :param zcml_file: Path (or spec) of a zcml file
+        :param views: List of dicts suitable as kwargs to
+            :meth:`pyramid.configuration.Configurator.add_view`
+        :param routes: List of tuples of (name, path, kwargs) to pass to
+            :meth:`pyramid.configuration.Configurator.add_route`
+        """
+        self.app = loadapp(config_url, **kwargs)
+        self.logfile = StringIO()
+        self.killer = None
+
+    def start_server(self, module=None):
+        self._spawn_server()
+        eventlet.sleep(0.3)
+
+    def _spawn_server(self, **kwargs):
+        """Spawns a new wsgi server with the given arguments.
+        Sets self.port to the port of the server, and self.killer is the greenlet
+        running it.
+
+        Kills any previously-running server.
+        """
+        if self.killer:
+            eventlet.greenthread.kill(self.killer)
+            eventlet.sleep(0)
+
+        new_kwargs = dict(max_size=128,
+                          log=self.logfile)
+        new_kwargs.update(kwargs)
+
+        sock = eventlet.listen(('localhost', 0))
+
+        self.port = sock.getsockname()[1]
+        self.killer = eventlet.spawn_n(wsgi.server, sock, self.app, **new_kwargs)
+
+    def clear_up(self, module=None):
+        eventlet.greenthread.kill(self.killer)
+        eventlet.sleep(0)
+        try:
+            hub = hubs.get_hub()
+            num_readers = len(hub.get_readers())
+            num_writers = len(hub.get_writers())
+            assert num_readers == num_writers == 0
+        except AssertionError:
+            print "ERROR: Hub not empty"
+            print debug.format_hub_timers()
+            print debug.format_hub_listeners()
+
+        eventlet.sleep(0)
 
 
 class WSTestGenerator(WebSocketView):
@@ -26,9 +101,9 @@ class WSTestGenerator(WebSocketView):
         def close_down(evt):
             evt.wait()
 #            context.shutdown()
-            sleep(0)
+            eventlet.sleep(0)
         LAST_MSG = event.Event()
-        spawn_n(close_down, LAST_MSG)
+        eventlet.spawn_n(close_down, LAST_MSG)
         while True:
             m = ws.wait()
             if m is None:
@@ -45,14 +120,15 @@ class WSTestGenerator(WebSocketView):
 
 class JsTestFiles(object):
 
-    def __init__(self, lib_files, test_files):
-        self.lib_files = lib_files
-        self.test_files = test_files
+    def __init__(self):
+        self.files = []
 
     def __call__(self, request):
-        return dict(test_files=self.lib_files + self.test_files)
+        return dict(test_files=self.files)
 
-class NamespaceContext(WebSocketAwareContext):
+js_test_view = JsTestFiles()
+
+class NamespaceContext(WebSocketAwareResource):
     """A root object that will return instances of itself on traversal
 
     It provides a :attr:`namespace` attribute that keeps track of parents
@@ -79,7 +155,7 @@ class NamespaceContext(WebSocketAwareContext):
 
     @property
     def namespace(self):
-        return '.'.join(model_path_tuple(self)[1:])
+        return '.'.join(resource_path_tuple(self)[1:])
 
     @property
     def queue(self):
@@ -112,17 +188,14 @@ class WSTestCase(object):
     CMD_LOOKUP = dict(
         darwin="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
         linux="/usr/bin/google-chrome",
+        linux2="/usr/bin/google-chrome",
     )
 
     def _setUp(self):
-        queue = Queue()
-        test_view = dict(view=JsTestFiles(self.LIB_FILES, self.TST_FILES),
-                         view_renderer='snotty:templates/test.html')
-        self.fixture = Fixture(zcml_file='snotty:tests.zcml',
-                               root_factory=NamespaceContext.get_factory(queue),
-                               routes=[['tests', '/run-tests', test_view]])
+        self.fixture = Fixture("config:snotty/snotty.ini", relative_to='.')
+        registry = self.fixture.app.registry
+        self.queue = registry.getUtility(ISnottyQueue)
         self.fixture.start_server()
-        self.queue = queue
 
     def _tearDown(self):
         #from nose.tools import set_trace; set_trace()
@@ -131,8 +204,9 @@ class WSTestCase(object):
     def run(self):
         self._setUp()
         done = event.Event()
-        spawn_n(self.start_chrome,
-                'http://localhost:%s/run-tests' % self.fixture.port, done)
+        js_test_view.files = self.LIB_FILES + self.TST_FILES
+        eventlet.spawn_n(self.start_chrome,
+                         'http://localhost:%s/run-tests' % self.fixture.port, done)
         try:
             while True:
                 msg = self.queue.get()
@@ -158,14 +232,17 @@ class WSTestCase(object):
         self.chrome = subprocess.Popen([chrome, '--single-process', url],
                                        stdout=subprocess.PIPE,
                                        stderr=subprocess.STDOUT, shell=False)
-        spawn_n(self.kill_chrome, done)
+        eventlet.spawn_n(self.kill_chrome, done)
         self.chrome.communicate()
 
     def kill_chrome(self, done):
         done.wait()
         print '##########\nGOT DONE'
-        self.chrome.kill()
-        sleep(0.5)
+        try:
+            self.chrome.kill()
+        except OSError: # Chrome was already running and it just opened another tab
+            pass
+        eventlet.sleep(0.2)
 
 
         

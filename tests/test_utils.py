@@ -1,7 +1,8 @@
 from eventlet import Queue, spawn_n, sleep, tpool, with_timeout
 from nose.tools import eq_, ok_, assert_raises
+from unittest import TestCase
+from snotty.utils import NamespaceContext, WSTestCase, ChromeNotFound, Fixture
 
-from snotty.utils import NamespaceContext, WSTestCase, ChromeNotFound
 
 def listener(q, acc):
 
@@ -51,6 +52,12 @@ def test_chromenotfound_raised():
     ws_testcase = _WSTestCase()
     assert_raises(ChromeNotFound, ws_testcase.start_chrome, 'some-url', None)
     assert_raises(KeyError, ws_testcase.start_chrome, 'some-url', None)
+
+class TestFixture(TestCase):
+
+    def test_fixture_init(self):
+        fixture = Fixture('config:snotty/snotty.ini', relative_to='.')
+
 
 class TestQuint(WSTestCase):
 

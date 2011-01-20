@@ -19,8 +19,8 @@ setup(name='snotty',
       zip_safe=False,
       install_requires=[
           'nose',
-          'rpz.websocket',
-          'repoze.bfg.jinja2',
+          'stargate',
+          'pyramid_jinja2',
 
           # -*- Extra requirements: -*-
       ],

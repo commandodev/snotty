@@ -1,22 +1,27 @@
-<configure xmlns="http://namespaces.repoze.org/bfg">
+<configure xmlns="http://pylonshq.com/pyramid">
 
   <!-- this must be included for the view declarations to work -->
-  <include package="repoze.bfg.includes" />
-  <include package="repoze.bfg.jinja2"/>
+  <include package="pyramid_zcml" />
+  <include package="pyramid_jinja2"/>
   <include package="zope.component" file="meta.zcml" />
 
   <renderer
-     factory="repoze.bfg.jinja2.bindings.renderer_factory"
+     factory="pyramid_jinja2.renderer_factory"
      name=".html"
      />
 
   <view
      context=".utils.NamespaceContext"
      view=".utils.WSTestGenerator"
-     custom_predicates='rpz.websocket.is_websocket'
+     custom_predicates='stargate.is_websocket'
      />
 
-
+  <route
+      name="test"
+      view=".utils.js_test_view"
+      pattern="/run-tests"
+      renderer="test.html"
+      />
   <!--<view-->
      <!--context=".models.Root"-->
      <!--view=".run.ws_view"-->

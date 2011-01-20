@@ -4,13 +4,15 @@ eventlet wsgi server
 See `Paste Deploy <http://pythonpaste.org/deploy/#paste-server-factory>`_
 for more details.
 """
+import pyramid_zcml
 
 from eventlet import spawn_n
 from eventlet import Queue
 
-from repoze.bfg.configuration import Configurator
+from pyramid import testing
 
-from snotty.utils import NamespaceContext, JsTestFiles
+from snotty.utils import NamespaceContext, JsTestFiles, ISnottyQueue
+
 
 
 import os.path
@@ -18,6 +20,8 @@ import os.path
 def read_q(q):
     while True:
         print q.get()
+
+
 
 def test_app_factory(global_config, **settings):
     """ This function returns a WSGI application.
@@ -27,22 +31,17 @@ def test_app_factory(global_config, **settings):
     """
     queue = Queue()
     zcml_file = settings.get('configure_zcml', 'tests.zcml')
-    config = Configurator(root_factory=NamespaceContext.get_factory(queue),
+    config = testing.setUp()
+    config.setup_registry(root_factory=NamespaceContext.get_factory(queue),
                           settings=settings)
-    config.begin()
+    config.include(pyramid_zcml)
     config.load_zcml(zcml_file)
     lib_files_dir = os.path.join(os.path.abspath(__file__), '..', 'static')
     jqtest_dir = os.path.join(os.path.dirname(__file__), '..', 'static/jquery-tests')
     lib_files = []#['/static/jquery.min.js', '/static/testinit.js', '/static/testrunner.js']
-    test_files = ['/static/tests/same.js', '/static/tests/test.js'] #+ \
-#                [os.path.join('static/jquery-tests', f) for f in
-#                    os.listdir(jqtest_dir)]
-#                    #['core.js', 'attributes.js']]
 
-    config.add_route('tests', '/run-tests',
-                     view=JsTestFiles(lib_files, test_files),
-                     view_renderer='templates/test.html')
-    config.end()
+    config.registry.registerUtility(queue, ISnottyQueue)
+    
     if settings.get('debug', None):
         try:
             from werkzeug.debug import DebuggedApplication
